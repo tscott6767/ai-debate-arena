@@ -10,8 +10,10 @@ venv/
 
 # databases and env files
 *.db
+*.sqlite3
 .env
-
+*.env
 # system files
 .DS_Store
 Thumbs.db
+*.db
