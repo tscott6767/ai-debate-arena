@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AI Debate Arena — Tribunal</title>
+  <style>
+    body { background:#000; color:#0f9; font-family: 'Courier New', monospace; margin:0; padding:20px; }
+    h1 { text-align:center; color:#0ff; }
+    .controls { text-align:center; margin:30px; }
+    input, button, select { padding:12px; margin:5px; background:#111; color:#0f9; border:1px solid #0f9; font-size:1em; }
+    #log { background:#001; padding:20px; min-height:70vh; border:1px solid #0f9; white-space:pre-wrap; font-family: monospace; }
+    table { border-collapse: collapse; margin:20px 0; }
+    td, th { border: 1px solid #0f9; padding: 8px 12px; }
+    strong { color: #ff0; }
+    .A { color: #0f0; }
+    .B { color: #f00; }
+  </style>
+</head>
+<body>
+  <h1>AI Debate Arena — With Judge</h1>
+<div class="controls">
+  <input id="topic" placeholder="Debate topic"
+         value="Should AI be open source?" style="width:60%">
+  <br>
+  <label>Side A Model:
+    <select id="modelA"></select>
+  </label>
+  <label>Side B Model:
+    <select id="modelB"></select>
+  </label>
+  <label>Judge Model:
+    <select id="judgeModel"></select>
+  </label>
+  <br>
+  <button onclick="start()">START DEBATE</button>
+</div>
+
+<script>
+let ws, buffer = "", log = document.getElementById("log");
+
+// Fetch available models once the page loads
+window.addEventListener("DOMContentLoaded", async () => {
+  await loadModels();
+});
+
+async function loadModels() {
+  try {
+    const res = await fetch("/api/models");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    const models = data.models || [];
+
+    // helper to fill select boxes
+    function fill(id, opts) {
+      const sel = document.getElementById(id);
+      sel.innerHTML = "";
+      if (opts.length === 0) {
+        const o = document.createElement("option");
+        o.textContent = "No models found";
+        sel.appendChild(o);
+        sel.disabled = true;
+        return;
+      }
+      opts.forEach(m => {
+        const o = document.createElement("option");
+        o.value = m;
+        o.textContent = m;
+        sel.appendChild(o);
+      });
+    }
+
+    fill("modelA", models);
+    fill("modelB", models);
+    fill("judgeModel", models);
+
+    // preselect defaults if they exist
+    if (models.includes("llama3:latest")) document.getElementById("modelA").value = "llama3:latest";
+    if (models.includes("qwen3:8b")) document.getElementById("modelB").value = "qwen3:8b";
+    document.getElementById("judgeModel").value = "llama3:latest";
+
+  } catch (e) {
+    console.error("Model list failed:", e);
+    alert("Could not load model list. See console for details.");
+  }
+}
+
+// ─── Start debate via websocket ───────────────────────────────────────────
+function start() {
+  if (ws) ws.close();
+  const t = encodeURIComponent(document.getElementById("topic").value || "AI Debate");
+  const modelA = encodeURIComponent(document.getElementById("modelA").value);
+  const modelB = encodeURIComponent(document.getElementById("modelB").value);
+  const modelJ = encodeURIComponent(document.getElementById("judgeModel").value);
+  ws = new WebSocket(
+      `ws://${location.host}/ws/debate?topic=${t}&rounds=6`
+    + `&provider_a=ollama&model_a=${modelA}`
+    + `&provider_b=ollama&model_b=${modelB}`
+    + `&judge_provider=ollama&judge_model=${modelJ}`
+  );
+  log.textContent = "Connecting...\n";
+  ws.onmessage = e => buffer += e.data;
+  ws.onclose = () => log.insertAdjacentText("beforeend", "\n\nDisconnected.\n");
+}
+
+// keep refreshing visible text every 100 ms for smooth streaming
+setInterval(() => {
+  if (buffer) {
+    log.insertAdjacentText("beforeend", buffer);
+    buffer = "";
+    log.scrollTop = log.scrollHeight;
+  }
+}, 100);
+</script>
+
+
+</body>
+</html>

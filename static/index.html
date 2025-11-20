@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>AI Debate Arena — Tribunal</title>
+  <style>
+    body { background:#000; color:#0f9; font-family: 'Courier New', monospace; margin:0; padding:20px; }
+    h1 { text-align:center; color:#0ff; }
+    .controls { text-align:center; margin:30px; }
+    input, button, select { padding:12px; margin:5px; background:#111; color:#0f9; border:1px solid #0f9; font-size:1em; }
+    #log { background:#001; padding:20px; min-height:70vh; border:1px solid #0f9; white-space:pre-wrap; font-family: monospace; }
+    table { border-collapse: collapse; margin:20px 0; }
+    td, th { border: 1px solid #0f9; padding: 8px 12px; }
+    strong { color: #ff0; }
+    .A { color: #0f0; }
+    .B { color: #f00; }
+  </style>
+</head>
+<body>
+  <h1>AI Debate Arena — With Judge</h1>
+
+  <div class="controls">
+    <input id="topic" placeholder="Debate topic"
+           value="Should AI be open source?" style="width:60%">
+    <br><br>
+
+    Side A: <select id="modelA"></select>
+    Side B: <select id="modelB"></select>
+    Judge: <select id="judgeModel"></select>
+    <br><br>
+
+    <button id="startBtn">START DEBATE</button>
+  </div>
+
+  <div id="log" style="
+       background:#001;
+       color:#0f9;
+       padding:20px;
+       min-height:70vh;
+       border:1px solid #0f9;
+       white-space:pre-wrap;
+       font-family:monospace;">
+    Ready. Click START.
+  </div>
+
+  <script>
+  let ws = null;
+  let buffer = "";
+  const log = document.getElementById("log");
+
+  //----------------------------------------------------------------------
+  //  Load model list on page load
+  //----------------------------------------------------------------------
+  window.addEventListener("DOMContentLoaded", async () => {
+    try {
+      const res = await fetch("/api/models");
+      const data = await res.json();
+      const models = data.models || [];
+
+      function fill(id) {
+        const sel = document.getElementById(id);
+        sel.innerHTML = "";
+        if (models.length === 0) {
+          sel.innerHTML = "<option>No models found</option>";
+          sel.disabled = true;
+          return;
+        }
+        models.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m;
+          opt.textContent = m;
+          sel.appendChild(opt);
+        });
+      }
+      ["modelA","modelB","judgeModel"].forEach(fill);
+
+      // sensible defaults
+      if (models.includes("llama3:latest")) document.getElementById("modelA").value = "llama3:latest";
+      if (models.includes("qwen3:8b"))     document.getElementById("modelB").value = "qwen3:8b";
+      document.getElementById("judgeModel").value = "llama3:latest";
+
+    } catch (err) {
+      console.error("Model load failed", err);
+      log.textContent = "⚠️ Could not load models, see browser console.";
+    }
+  });
+
+  //----------------------------------------------------------------------
+  //  Start a debate
+  //----------------------------------------------------------------------
+  async function start() {
+    // close any previous socket
+    if (ws && ws.readyState <= 1) ws.close();
+
+    const topic  = encodeURIComponent(document.getElementById("topic").value || "AI Debate");
+    const modelA = encodeURIComponent(document.getElementById("modelA").value);
+    const modelB = encodeURIComponent(document.getElementById("modelB").value);
+    const judgeM = encodeURIComponent(document.getElementById("judgeModel").value);
+
+    const url = `ws://${location.host}/ws/debate`
+              + `?topic=${topic}&rounds=6`
+              + `&provider_a=ollama&model_a=${modelA}`
+              + `&provider_b=ollama&model_b=${modelB}`
+              + `&judge_provider=ollama&judge_model=${judgeM}`;
+
+    log.textContent = `Connecting to ${url} \n`;
+
+    try {
+      ws = new WebSocket(url);
+      ws.onopen = () => log.insertAdjacentText("beforeend", "✅ Connected!\n\n");
+      ws.onmessage = e => { buffer += e.data; };
+      ws.onerror   = e => log.insertAdjacentText("beforeend", `\n⚠️ WebSocket error ${e.message||""}\n`);
+      ws.onclose   = () => log.insertAdjacentText("beforeend", "\n\n🔒 Disconnected.\n");
+    } catch (e) {
+      log.insertAdjacentText("beforeend", `\n❌ Failed to open WebSocket: ${e}\n`);
+      console.error("WebSocket open fail:", e);
+    }
+  }
+
+  //----------------------------------------------------------------------
+  //  Refresh log display
+  //----------------------------------------------------------------------
+  setInterval(() => {
+    if (buffer) {
+      log.insertAdjacentText("beforeend", buffer);
+      buffer = "";
+      log.scrollTop = log.scrollHeight;
+    }
+  }, 120);
+
+  // make button work even if HTML loaded before script parsed
+  document.getElementById("startBtn").addEventListener("click", start);
+  </script>
+</body>
+</html>

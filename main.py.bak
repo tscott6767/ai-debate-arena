@@ -1,0 +1,50 @@
+import uuid
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.staticfiles import StaticFiles
+from controller import DebateController
+from adapters import get_adapter
+from schemas import DebateConfig
+from logger import log_debate
+
+app = FastAPI(title="AI Debate Arena — Tribunal")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.websocket("/ws/debate")
+async def debate_endpoint(
+    ws: WebSocket,
+    topic: str = Query(..., max_length=500),
+    rounds: int = Query(6, ge=1, le=30),
+    provider_a: str = Query("ollama"),
+    model_a: str = Query("llama3:latest"),      # ✅ valid model
+    provider_b: str = Query("ollama"),
+    model_b: str = Query("qwen3:8b"),       # ✅ valid model
+    judge_provider: str = Query("ollama"),
+    judge_model: str = Query("llama3:latest"),
+):
+    session_id = str(uuid.uuid4())[:8]
+    await ws.accept()
+    await ws.send_text(f"Session {session_id} | {rounds} rounds | Topic: {topic}\n\n")
+
+    cfg = DebateConfig(
+        topic=topic, rounds=rounds,
+        adapter_a=get_adapter(provider_a, model_a),
+        adapter_b=get_adapter(provider_b, model_b),
+        judge_provider=judge_provider, judge_model=judge_model,
+    )
+
+    ctrl = DebateController(cfg, session_id)
+    log_buffer = []
+
+    try:
+        async for chunk in ctrl.run():
+            log_buffer.append(chunk)
+            await ws.send_text(chunk)
+        log_debate(session_id, topic, ''.join(log_buffer))
+        await ws.send_text("\n\nDebate saved to debates.db\n")
+    except WebSocketDisconnect:
+        log_debate(session_id, topic, ''.join(log_buffer) + "\n\n[CLIENT DISCONNECT]")
+    except Exception as e:
+        await ws.send_text(f"\nSERVER ERROR: {e}")
+        log_debate(session_id, topic, ''.join(log_buffer) + f"\n\n[SERVER ERROR: {e}]")
+    finally:
+        await ws.close()
