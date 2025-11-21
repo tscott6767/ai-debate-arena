@@ -1,183 +1,213 @@
-# ⚔️ AI Debate Arena — Tribunal Edition
 
-AI Debate Arena is a **FastAPI‑based real‑time debate simulator** that lets multiple LLMs (via Ollama or OpenAI‑compatible APIs) argue any topic in a live browser UI.  
-It streams tokens as they’re generated and concludes each round with an optional **AI Judge** scoring panel.
+# ⚔️ AI Debate Arena — Tribunal Edition (v2.1)
 
----
-
-## 🧠 Features
-
-- 💬 Two (models) debate in real time — fully streamed to the browser  
-- 🧑‍⚖️ Third model acts as a judge with logical & persuasion scores  
-- 🔄 Supports Ollama (local LLMs), OpenAI, Groq, LM Studio, etc.  
-- 💾 Transcripts automatically logged to SQLite (`debates.db`)  
-- 🌐 Simple browser interface with model dropdown selection  
-- ⚙️ Configurable via `.env` environment file  
+> **Multi‑model, real‑time AI debate framework**  
+> Debate any two models live in your browser with an impartial AI Judge and full streaming transcripts.
 
 ---
 
-## ⚡️ Quick Start (Local Ollama)
+## 🚀 Overview
+
+AI Debate Arena lets any combination of language models (OpenAI, Groq, Mistral, Anthropic Claude, Ollama, LM Studio, etc.) argue topics in real time through a FastAPI server while a Judge model scores each round.
+
+It now includes:
+
+- 🎯 **Multi‑model adapters** (OpenAI, Groq, Mistral, Anthropic, Ollama, LM Studio)
+- ⚖️ **AI Judge & Scoring**
+- 💬 **WebSocket streaming** with live UI in the browser
+- 🧠 **multi_battle_test.py** for connectivity testing
+- ⚙️ **Dynamic .env configuration**
+- 🪶 **UTF‑8‑safe adapters** (no more ASCII errors)
+- 💾 Automatic SQLite logging (`debates.db`)
+- 🌐 **FastAPI + HTML frontend** served from `/static/index.html`
+
+---
+
+## 🧩 Project Structure
+
+
+ai-debate-arena/
+├── adapters.py              # Provider adapters (OpenAI/Groq/Mistral/Ollama/etc.)
+├── controller.py            # Debate loop + judge integration
+├── judge.py                 # AI judge logic
+├── logger.py                # SQLite transcript logger
+├── main.py                  # FastAPI entrypoint / websocket server
+├── schemas.py               # Pydantic models
+├── multi_battle_test.py     # Connectivity/self-test script
+├── static/
+│   └── index.html           # Live debate front-end
+├── .env.example             # Environment template (safe to commit)
+├── .gitignore
+├── README.md
+└── LICENSE
+
+---
+
+## ⚙️ Installation & Setup
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/<youruser>/ai-debate-arena.git
+git clone https://github.com/tscott6767/ai-debate-arena.git
 cd ai-debate-arena
-
-# 2. Create & activate a virtual environment
-python3 -m venv venv
-source venv/bin/activate     # (Windows: venv\Scripts\activate)
-
-# 3. Install dependencies
+python -m venv venv
+source venv/bin/activate  # (or .\venv\Scripts\activate on Windows)
 pip install -r requirements.txt
 
-# 4. Copy the environment template
+
+🔧 Environment Variables
+Copy the template and fill in your keys:
 cp .env.example .env
-# (default assumes Ollama runs locally on port 11434)
+nano .env
 
-# 5. Launch Ollama in another terminal
-ollama serve
+Example .env.example contents:
+OPENAI_API_KEY=sk-your_openai_key
+GROQ_API_KEY=gsk-your_groq_key
+MISTRAL_API_KEY=sk-your_mistral_key
+ANTHROPIC_API_KEY=sk-ant_your_claude_key
 
-# 6. Start the debate arena
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-
-Then open
-👉 http://localhost:8000/static/index.html
-
-🌐 Using a Remote Ollama Server
-If your LLMs run on another machine:
-1. Edit .env on the FastAPI host:
-OLLAMA_HOST=http://<remote‑ip>:11434
-FASTAPI_HOST=0.0.0.0
-FASTAPI_PORT=8000
-
-2. Make sure Ollama is listening on that IP and firewall allows TCP 11434.
-3. Restart the FastAPI server → models from that server will appear automatically.
-
-🖥️ UI Guide
-
-
-
-Section
-Purpose
-
-
-
-
-Topic Field
-Enter any debate subject
-
-
-Side A / Side B / Judge
-Choose models (populated from /api/models)
-
-
-START DEBATE
-Begins a real‑time exchange between the chosen models
-
-
-Log Window
-Streams live tokens and the judge’s final verdict
-
-
-
-All debates are stored in debates.db with timestamps.
-To view saved logs:
-sqlite3 debates.db "SELECT id, ts, topic, length(transcript) FROM debates;"
-
-
-⚙️ Configuration (.env)
-# Edit and rename .env.example → .env
-OLLAMA_HOST=http://localhost:11434
+OLLAMA_HOST=http://<your Ollama IP>:11434
 FASTAPI_HOST=0.0.0.0
 FASTAPI_PORT=8000
 DEBATE_DB_PATH=debates.db
+DEBUG_MODE=false
 
+Never commit .env files—only .env.example stays tracked.
 
-🧭 REST Endpoints
+🧠 Quick Start
+1️⃣ Launch the server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
+Visit http://localhost:8000/static/index.html
+2️⃣ Run a local connectivity test
+python multi_battle_test.py
 
+If every provider shows ✅ First token, all your API keys and hosts are working.
 
-HTTP Method
-Route
-Description
+⚔️ Web Interface
 
+Enter your debate topic
+Choose models for Side A and Side B
+Select a judge model
+Pick round count
+Click Start Debate
 
+Watch tokens stream live.
+At the end, the judge provides a verdict, summary, and scoring table.
 
+💾 Database Logging
+Each debate session (topic + transcript + scores) is automatically saved to debates.db.
+Location configurable via DEBATE_DB_PATH in .env.
 
-GET
-/
-Health‑check / welcome message
+🧰 Connectivity Test Details
+multi_battle_test.py verifies all API integrations independently.
+python multi_battle_test.py
 
+Sample output:
+🔍 Testing ollama  →  llama3:latest
+✅ First token: Hello!
 
-GET
-/api/models
-Returns available Ollama models
+🔍 Testing openai  →  gpt-4o-mini
+✅ First token: Hi there 😊
 
+If you see 404s, update your OLLAMA_HOST to the correct daemon endpoint
+(e.g. http://<your Ollama IP>:11434/api/chat vs /api/generate).
 
-WS
-/ws/debate
-Bi‑directional WebSocket stream for debates
-
-
-
-
-🧑‍💻 Development Tips
-
-Test model connectivity manually:
-curl http://<OLLAMA_HOST>/api/tagscurl -X POST http://<OLLAMA_HOST>/api/chat \   -H "Content-Type: application/json" \   -d '{"model":"llama3:latest","messages":[{"role":"user","content":"Hello"}]}'
-
-Restart uvicorn after editing .py files (CTRL+C → rerun).
-Use python -m py_compile *.py to validate syntax before committing.
-
-
-🛡️ Security Notes
-
-Never commit your personal .env. Commit only .env.example.
-If exposing publicly, proxy through NGINX with HTTPS (Let’s Encrypt) or Cloudflare Tunnel.
-Use Proxmox LXC or Docker for process isolation.
-
-
-🧱 Folder Structure
-ai-debate-arena/
-│
-├── adapters.py       # model interfaces (Ollama / OpenAI)
-├── controller.py     # debate orchestrator
-├── judge.py          # judge logic
-├── logger.py         # SQLite logger
-├── main.py           # FastAPI entrypoint
-├── schemas.py        # Pydantic classes
-├── static/           # web UI (index.html + JS)
-├── .env.example
-├── debates.db
-└── venv/             # virtual environment (local)
-
-
-🧪 Known Tested Setups
-
-✅ Ubuntu 22.04 LXC on Proxmox
-✅ Ollama 0.1.40 (remote & local)
-✅ Python 3.10 → 3.12
-✅ FastAPI + Uvicorn + httpx
-
-
-📜 License
-MIT License © 2025 Antony L Scott
-See LICENSE for full text.
-
-❤️ Contributing
-1. Fork this repo
-2. Create a feature branch  →  git checkout -b feature/some‑idea
-3. Commit changes
-4. Push and open a Pull Request
-
-### ✨ Example Topics
-
-Should AI be open source?
-Can machines ever truly understand consciousness?
-Is time an illusion?
+🔒 Best Practices
 
 
 
-"The best way to test an idea is to argue with an equal."
-— AI Debate Arena Team
+Do
+Don’t
+
+
+
+
+Keep .env private
+Never commit real API keys
+
+
+Commit .env.example only
+
+
+
+Use isolated Python venv
+
+
+
+Backup debates.db if needed
+
+
+
+
+
+🧮 Troubleshooting
+
+
+
+Symptom
+Cause
+Fix
+
+
+
+
+404 @ /chat
+Wrong endpoint
+Update OllamaAdapter or OLLAMA_HOST
+
+
+Unauthorized / api_key must be set
+Missing keys
+Fill .env and load via load_dotenv()
+
+
+ascii codec can't encode
+Old adapters version
+Replace with UTF‑8‑safe adapters.py (v2.1)
+
+
+Connection refused @ 11434
+Ollama daemon off
+Start ollama serve or fix LAN IP
+
+
+
+
+🧾 Version Control & GitHub Workflow
+Push new changes
+git add main.py adapters.py multi_battle_test.py README.md static/index.html .env.example
+git commit -m "Update core files and environment template"
+git push origin main
+
+Tag a release
+git tag -a v2.1 -m "Tribunal Edition stable release"
+git push origin v2.1
+
+
+🧱 Upcoming Features
+
+🏆 Tournament brackets (auto play‑offs)
+👥 Audience voting UI
+🎙️ Voice narration via ElevenLabs / XTTS
+🌐 Public gallery of past debates
+🔐 User accounts + API keys per user
+
+
+🤝 Contributing
+Pull requests are welcome!
+For major changes, open an issue first to discuss what you’d like to modify.
+
+Fork this repo
+Create your feature branch:
+git checkout -b feature/amazing-update
+Commit and push it
+Open a PR against main
+
+
+🪪 License
+Released under the MIT License.
+See LICENSE for details.
+
+❤️ Acknowledgements
+Thanks to the open‑source LLM community & contributors who test, troubleshoot, and push AI debates into the big arena.
+
 

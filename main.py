@@ -1,88 +1,90 @@
-# main.py
-"""
-main.py — FastAPI entrypoint for the AI Debate Arena.
-
-Serves the static web interface, lists available models, and coordinates
-real‑time debate sessions between models via WebSocket.
-"""
-
-import uuid
-import os
-import httpx
-from dotenv import load_dotenv
+import uuid, os, httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from controller import DebateController
 from adapters import get_adapter
 from schemas import DebateConfig
 from logger import log_debate
+from dotenv import load_dotenv
 
-# ─── Load environment variables ───────────────────────────────────────────────
+# ───────────────────────────────
+#  Load environment
+# ───────────────────────────────
 load_dotenv()
 
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-FASTAPI_HOST = os.getenv("FASTAPI_HOST", "0.0.0.0")
-FASTAPI_PORT = int(os.getenv("FASTAPI_PORT", "8000"))
-
-# ─── FastAPI App ───────────────────────────────────────────────────────────────
-app = FastAPI(title="AI Debate Arena — Tribunal Edition")
+app = FastAPI(title="AI Debate Arena — Tribunal Edition")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# ─── Root Ping ────────────────────────────────────────────────────────────────
 @app.get("/")
 async def root():
-    return {"message": "AI Debate Arena is running. Open /static/index.html"}
+    return {
+        "message": "AI Debate Arena is running. Visit /static/index.html for the web UI."
+    }
 
 
-# ─── List Available Models (Ollama) ───────────────────────────────────────────
+# ────────────────────────────────────────────
+#  List available models per provider
+# ────────────────────────────────────────────
 @app.get("/api/models")
-async def list_models(provider: str = "ollama", host: str = OLLAMA_HOST):
+async def list_models(provider: str | None = Query(None)):
     """
-    Return available model names from the Ollama daemon (configurable via OLLAMA_HOST).
-    Extendable later to support other providers.
+    Returns available models per provider.
+    For Ollama, fetches them live from the daemon defined in OLLAMA_HOST.
+    For others, provides static defaults.
     """
-    if provider != "ollama":
-        return {
-            "provider": provider,
-            "models": [],
-            "error": "Only 'ollama' supported currently",
+    try:
+        # ── Ollama dynamic discovery ─────────────────────────────────────
+        if provider and provider.lower() == "ollama":
+            base = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            async with httpx.AsyncClient(timeout=5.0) as c:
+                r = await c.get(f"{base}/api/tags")
+                r.raise_for_status()
+                data = r.json()
+                models = [m["name"] for m in data.get("models", [])]
+                return JSONResponse({"models": models})
+
+        # ── Static provider → model map ──────────────────────────────────
+        mapping = {
+            "openai":   ["gpt-4o-mini", "gpt-4-turbo"],
+            "groq":     ["mixtral-8x7b", "llama3-70b"],
+            "mistral":  ["mistral-small", "mistral-medium"],
+            "anthropic": ["claude-3-haiku", "claude-3-sonnet"],
+            "ollama":   [],  # handled dynamically above
         }
 
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(f"{host}/api/tags")
-            r.raise_for_status()
-            data = r.json()
-            models = [m["name"] for m in data.get("models", [])]
-        return {"provider": provider, "models": sorted(models)}
+        if provider:
+            return JSONResponse({"models": mapping.get(provider.lower(), [])})
+        return JSONResponse(mapping)
+
     except Exception as e:
-        return {"provider": provider, "models": [], "error": str(e)}
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# ─── Debate WebSocket ─────────────────────────────────────────────────────────
+# ────────────────────────────────────────────
+#  WebSocket Debate Handler
+# ────────────────────────────────────────────
 @app.websocket("/ws/debate")
 async def debate_endpoint(
     ws: WebSocket,
     topic: str = Query(..., max_length=500),
     rounds: int = Query(6, ge=1, le=30),
-    # ─ Side A
+    # Side A
     provider_a: str = Query("ollama"),
     model_a: str = Query("llama3:latest"),
-    # ─ Side B
-    provider_b: str = Query("ollama"),
-    model_b: str = Query("qwen3:8b"),
-    # ─ Judge
-    judge_provider: str = Query("ollama"),
-    judge_model: str = Query("llama3:latest"),
+    # Side B
+    provider_b: str = Query("openai"),
+    model_b: str = Query("gpt-4o-mini"),
+    # Judge
+    judge_provider: str = Query("anthropic"),
+    judge_model: str = Query("claude-3-sonnet"),
 ):
     session_id = str(uuid.uuid4())[:8]
     await ws.accept()
-    await ws.send_text(
-        f"Session {session_id} | {rounds} rounds | Topic: {topic}\n\n"
-    )
+    await ws.send_text(f"Session {session_id} | {rounds} rounds | Judge: {judge_model}\n\n")
 
-    # Build debate configuration
+    # Initialize adapters
     config = DebateConfig(
         topic=topic,
         rounds=rounds,
@@ -93,28 +95,22 @@ async def debate_endpoint(
     )
 
     controller = DebateController(config, session_id)
-    full_transcript_parts: list[str] = []
+    full_transcript = ""
 
-    # ─── Debate Loop ───────────────────────────────────────────────
     try:
         async for chunk in controller.run():
+            full_transcript += chunk
             await ws.send_text(chunk)
-            full_transcript_parts.append(chunk)
 
-        transcript = "".join(full_transcript_parts)
-        log_debate(session_id, topic, transcript)
-        await ws.send_text("\n\nDebate saved to debates.db\n")
+        await ws.send_text("\n\nDebate saved to debates.db")
+        log_debate(session_id, topic, full_transcript)
 
     except WebSocketDisconnect:
-        print(f"[{session_id}] Client disconnected")
-        transcript = "".join(full_transcript_parts) + "\n\n[CLIENT DISCONNECTED]"
-        log_debate(session_id, topic, transcript)
-
+        print(f"[{session_id}] Client disconnected")
     except Exception as e:
-        err = f"\nSERVER ERROR: {e}"
-        await ws.send_text(err)
-        transcript = "".join(full_transcript_parts) + err
-        log_debate(session_id, topic, transcript)
-
+        msg = f"\nSERVER ERROR: {e}"
+        await ws.send_text(msg)
+        full_transcript += msg
+        log_debate(session_id, topic, full_transcript)
     finally:
         await ws.close()
