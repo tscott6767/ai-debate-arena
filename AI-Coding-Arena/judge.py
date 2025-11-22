@@ -2,8 +2,7 @@
 # Android 14 SAF-focused judge — kills deprecated APIs instantly
 import re
 from adapters import get_adapter
-
-def extract_final_code(transcript: str) -> str:
+async def run_judgment(a, b, transcript: str, topic: str, provider: str, model: str):
     blocks = re.findall(r'```(?:java)?\s*\n(.*?)\n```', transcript, re.DOTALL)
     return "\n\n".join(blocks[-3:]) if blocks else "<NO VALID CODE FOUND>"
 
@@ -21,4 +20,4 @@ Reward:
 • ACTION_OPEN_DOCUMENT_TREE + takePersistableUriPermission
 • Clean, compiling, modern Android 14 code
 
-Here is the final code:
+Here is the final code:"""
