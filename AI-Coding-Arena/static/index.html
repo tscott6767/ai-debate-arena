@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Debate Arena</title>
+  <style>
+    body { background:#000; color:#0f9; font-family:'Courier New', monospace; margin:0; padding:20px; }
+    h1 { text-align:center; margin-bottom:20px; }
+    .panel { text-align:center; margin:15px 0; }
+    textarea, input, select, button {
+      background:#111; color:#0f9; border:1px solid #0f9; padding:8px; font-family:inherit; font-size:1em; margin:4px;
+    }
+    textarea { width:80%; max-width:900px; height:120px; resize:vertical; }
+    button { cursor:pointer; font-weight:bold; padding:10px 20px; }
+    button:hover { background:#0f9; color:#000; }
+    #log {
+      background:#001; border:1px solid #0f9; padding:15px; min-height:60vh; margin-top:20px;
+      overflow-y:auto; white-space:pre-wrap; font-size:0.95em; line-height:1.4;
+    }
+    .label { color:#0bc; font-weight:bold; }
+    .status { color:#ff0; font-size:0.9em; margin-left:10px; }
+  </style>
+</head>
+<body>
+  <h1>AI Debate Arena</h1>
+
+  <div class="panel">
+    <div class="label">Debate Topic (multiline OK):</div><br>
+    <textarea id="topic" placeholder="Enter detailed topic...">Create the ultimate un-foolable Android SAF judge.py...</textarea>
+  </div>
+  <div class="panel">
+    <span class="label">Rounds:</span>
+    <input id="rounds" type="number" min="1" max="50" value="12" style="width:70px;">
+  </div>
+
+  <div class="panel"><b>Side A</b><br>
+    <span class="label">Provider:</span><select id="providerA" onchange="loadModels('A')"></select>
+    <span class="label">Model:</span><select id="modelA"></select>
+  </div>
+  <div class="panel"><b>Side B</b><br>
+    <span class="label">Provider:</span><select id="providerB" onchange="loadModels('B')"></select>
+    <span class="label">Model:</span><select id="modelB"></select>
+  </div>
+  <div class="panel"><b>Judge</b><br>
+    <span class="label">Provider:</span><select id="providerJudge" onchange="loadModels('Judge')"></select>
+    <span class="label">Model:</span><select id="modelJudge"></select>
+  </div>
+
+  <div class="panel">
+    <button id="start-btn">START DEBATE</button>
+    <span id="status" class="status">Ready</span>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    const log = document.getElementById('log');
+    const status = document.getElementById('status');
+    let ws = null;
+
+    async function loadProviders() {
+      try {
+        const res = await fetch('/api/models');
+        const data = await res.json();
+        const providers = Object.keys(data);
+        ['A','B','Judge'].forEach(s => {
+          const p = document.getElementById('provider'+s);
+          const m = document.getElementById('model'+s);
+          p.innerHTML = "";
+          providers.forEach(x => p.appendChild(new Option(x,x)));
+          if (providers.length) {
+            p.value = providers[0];
+            loadModels(s);
+          }
+        });
+      } catch(e) {
+        log("Failed to load providers — is server running?");
+      }
+    }
+
+    async function loadModels(s) {
+      const prov = document.getElementById('provider'+s).value;
+      const m = document.getElementById('model'+s);
+      m.innerHTML = "<option>Loading...</option>";
+      if (!prov) return;
+      const res = await fetch(`/api/models?provider=${prov}`);
+      const json = await res.json();
+      m.innerHTML = "";
+      (json.models || []).forEach(x => m.appendChild(new Option(x,x)));
+      if (json.models?.length) m.value = json.models[0];
+    }
+
+    document.getElementById('start-btn').onclick = () => {
+      if (ws) ws.close();
+
+      // Safe defaults + never empty
+      const defaults = { provider: "ollama", model: "llama3" };
+      const get = id => document.getElementById(id).value || defaults[id.includes('provider') ? 'provider' : 'model'];
+
+      const topic = (document.getElementById('topic').value || "test").slice(0,800);
+      const url = `ws://${location.host}/ws/debate`
+        + `?topic=${encodeURIComponent(topic)}`
+        + `&rounds=${document.getElementById('rounds').value||12}`
+        + `&provider_a=${get('providerA')}&model_a=${get('modelA')}`
+        + `&provider_b=${get('providerB')}&model_b=${get('modelB')}`
+        + `&judge_provider=${get('providerJudge')}&judge_model=${get('modelJudge')}`;
+
+      ws = new WebSocket(url);
+      log.textContent = "Connecting...\n";
+      status.textContent = "Connecting...";
+
+      ws.onopen = () => {
+        status.textContent = "Debate STARTED";
+        log.insertAdjacentText("beforeend", "Connected — debate running...\n");
+      };
+      ws.onmessage = e => {
+        log.insertAdjacentText("beforeend", e.data);
+        log.scrollTop = log.scrollHeight;
+      };
+      ws.onclose = () => status.textContent = "Finished";
+      ws.onerror = () => status.textContent = "Error — check console";
+    };
+
+    loadProviders();
+  </script>
+</body>
+</html>

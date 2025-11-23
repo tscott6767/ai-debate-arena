@@ -1,77 +1,75 @@
-# judge.py — FINAL, 100% WORKING VERSION (Android 14 SAF Judge)
+# judge.py — UNFOOLABLE ANDROID 14 SAF JUDGE (FINAL EVOLUTION)
 import re
 from adapters import get_adapter
 
+# INSTANT DEATH FOR ANY LEGACY FILE API
+BANNED = [
+    r'\bFile\s+', r'\.getExternalStorage', r'\.getAbsolutePath',
+    r'\.listFiles\s*\(', r'\.getParentFile', r'Uri\.fromFile',
+    r'\benvironment\.getExternalStorage', r'new File\s*\('
+]
 
-def extract_final_code(transcript: str) -> str:
-    """Extract the last 3 code blocks from the debate (java, xml, etc.)"""
-    blocks = re.findall(r'```(?:java|kotlin|xml)?\s*\n(.*?)\n```', transcript, re.DOTALL)
-    if not blocks:
-        return "<NO VALID CODE FOUND IN ENTIRE DEBATE>"
-    return "\n\n".join(blocks[-3:])
+# REQUIRED FOR REAL SAF (at least 3 needed)
+REQUIRED = [
+    r'ACTION_OPEN_DOCUMENT_TREE',
+    r'takePersistableUriPermission',
+    r'DocumentFile\.fromTreeUri',
+    r'DocumentFile.*\.listFiles',
+    r'DocumentsContract'
+]
 
+def count_banned(code: str) -> int:
+    return sum(len(re.findall(p, code, re.IGNORECASE)) for p in BANNED)
 
-JUDGE_PROMPT = """You are the Supreme Android Code Judge — strict, technical, unforgiving.
+def count_required(code: str) -> int:
+    return sum(bool(re.search(p, code, re.IGNORECASE)) for p in REQUIRED)
 
-Your only job is to evaluate the FINAL code produced in this debate.
-CRITICAL: If you see any of these, give 0/10 immediately:
-• Environment.getExternalStorageDirectory()
-• new File(...)
-• Uri.fromFile(...)
-• currentDirectory.listFiles()
-• file.getAbsolutePath()
+def extract_code(transcript: str) -> str:
+    blocks = re.findall(r'```(?:java|kotlin|xml|python)?\s*\n(.*?)\n```', transcript, re.DOTALL)
+    return "\n\n".join(blocks[-5:]) if blocks else "NO CODE"
 
-These are BANNED on Android 10+. Only DocumentProvider + tree URIs are allowed.
-Punish severely:
-• Any use of new File(), Environment.getExternalStorageDirectory(), or legacy storage APIs
-• Bullet lists, release notes, explanations, or non-code output
-• Regressions, broken navigation, missing features
-• No persist difficile URI permissions (takePersistableUriPermission)
+JUDGE_PROMPT = """You are the Supreme Android SAF Judge.
 
-Reward highly:
-• Correct use of Storage Access Framework (SAF)
-• ACTION_OPEN_DOCUMENT_TREE + takePersistableUriPermission
-• Clean, modern, compiling Android 14 code
-• Folder navigation, copy/delete, persistent permissions
+MECHANICAL VERDICT FIRST:
+BANNED legacy APIs detected: {banned}
+REQUIRED SAF APIs found: {required}
 
-Here is the final extracted code:
+If BANNED > 0 → INSTANT DEATH PENALTY (0/10 everything)
+If REQUIRED < 3 → max 2/10 for SAF usage
 
+Then give normal verdict.
 
-Deliver your verdict in this EXACT format:
+Code:
 
-### FINAL CODE VERDICT
-
-**Winner:** Side A | Side B | Tie | Neither (both failed)
-
-**Final Code Status:** Valid / Invalid / No code
-
-**Score (0–10):**
-| Criterion                        | Score | Notes |
-|----------------------------------|-------|-------|
-| Compiles on Android 14           | ?/10  |       |
-| Uses only SAF (no File API)      | ?/10  |       |
-| Folder navigation works          | ?/10  |       |
-| Permissions persist              | ?/10  |       |
-| No hallucinations/non-code       | ?/10  |       |
-| No regression                    | ?/10  |       |
-| Code quality                     | ?/10  |       |
-
-**Winner Reasoning:** [clear explanation]
-**Critical Bugs:** • [list or "None"]
-**Recommendation:** Continue with [Side A / Side B / Neither]
-
-Be brutal. Only perfect code wins.
+Use exact table. Be brutal.
 """
 
-
 async def run_judgment(a, b, transcript: str, topic: str, provider: str, model: str):
-    """Streams the final judgment from the judge model."""
+    code = extract_code(transcript)
+    banned = count_banned(code)
+    required = count_required(code)
+
+    if banned > 0:
+        verdict = f"""### FINAL CODE VERDICT
+**INSTANT DEATH PENALTY** — {banned} legacy File API(s) detected
+Winner: Neither
+All scores: 0/10
+Critical Bugs: • Used banned java.io.File / legacy storage APIs"""
+        for word in verdict.split():
+            yield word + " "
+        return
+
+    system_prompt = JUDGE_PROMPT.format(
+        final_code=code,
+        banned=banned,
+        required=required
+    )
+
     judge = get_adapter(provider, model)
-    final_code = extract_final_code(transcript)
-    system_prompt = JUDGE_PROMPT.format(final_code=final_code)
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Topic: {topic}\nSide A: {a.name}\nSide B: {b.name}\n\nJudge now."}
+        {"role": "user", "content": f"Judge the final code. Side A: {a.name} | Side B: {b.name}"}
     ]
+
     async for token in judge.stream(messages):
         yield token

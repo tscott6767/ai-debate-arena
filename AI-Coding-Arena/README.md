@@ -1,4 +1,4 @@
-# AI Debate Arena — Android SAF Edition
+# AI Coding Arena — Android SAF Edition
 
 A brutal, adversarial, self-improving multi-agent coding platform.
 
@@ -23,7 +23,7 @@ Only perfect, modern, compiling code survives.
 1. Change the debate topic
 2. Edit `prompts.py` rules for your language
 3. Replace `judge.py` with a judge that knows your framework's best practices
-
+4. After each run place the new judge verdict into the prompt for next run for real time evolution.
 Example: Create a Rust judge that kills `println!` debugging and rewards `async` + tests.
 
 ### Run
