@@ -98,7 +98,46 @@ Access the Arena at: http://localhost:8000
 - POST /submit – submit a pair of codes (A and B).
 - GET /verdicts – stream latest results.
 - GET /leaderboard – ELO‑style ranking of models by win rate and average score.
+🧾 README.md Additions
+Add this new section below your setup instructions so anyone cloning later can run it without confusion:
 
+💬 Web Interface – Updated Token System
+Recent versions of AI Debate Arena use a token‑based topic transfer mechanism to handle large debate histories safely:
+
+
+Continuations:
+Each new debate automatically fetches the previous transcript via
+GET /api/continuation?limit=1&round_no=<n>.
+
+
+Token registration:
+The browser then posts the long prompt body to
+POST /api/register_topic → receives a short token, e.g. 02353ffc732f56f5.
+
+
+WebSocket startup:
+The debate begins with
+ws://<host>/ws/debate?token=<token>&rounds=...,
+eliminating URL length limitations and preventing 400 errors even with very long histories.
+
+
+Server preload:
+Topics are stored temporarily in memory (TOPIC_CACHE) and removed after retrieval to keep memory use low.
+
+
+Typical workflow
+python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+Then open http://localhost:8000/static/index.html
+→ press START DEBATE to begin.
+
+
+Expected log output
+TOPIC length: 79004
+Round 13 — Continuation of Round 12
+...
+
+This confirms the previous transcript was loaded successfully.
 🗺️ Full Roadmap
 ### Phase I — Foundation (✅ Complete)
 ✅ Android 14 Judge eliminates legacy File APIs.

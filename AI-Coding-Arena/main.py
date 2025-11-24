@@ -1,8 +1,8 @@
-# main.py — AI Debate Arena (FINAL, UNBREAKABLE VERSION)
 import uuid
 import os
+import secrets
 import httpx
-import sqlite3                     ### NEW: for on-demand local query
+import sqlite3
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,37 +11,28 @@ from adapters import get_adapter
 from schemas import DebateConfig
 from logger import log_debate, DB_PATH
 from dotenv import load_dotenv
-
-### NEW: import the continuation helpers
 from utils.continuation import get_last_debate, build_continuation_prompt
 
-last = get_last_debate()
-if last:
-    past_transcript = last[4]  # fifth column is transcript text
-    new_task = (
-        "Expand the previous SAF single-file picker into a complete folder manager "
-        "using ACTION_OPEN_DOCUMENT_TREE with create/read/write/delete support."
-    )
-    topic = build_continuation_prompt(past_transcript, new_task, round_no=13)
-else:
-    topic = "Round 13 — Start a new debate: implement a full SAF manager."
-
+# -------------------------------------------------------------------
+# Startup preload
+# -------------------------------------------------------------------
 load_dotenv()
 
-app = FastAPI(title="AI Debate Arena — Tribunal Edition")
+TOPIC_CACHE: dict[str, str] = {}   # short-term storage for large topics
+
+app = FastAPI(title="AI Debate Arena")
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/")
 async def root():
-    return {
-        "message": "AI Debate Arena is running. Visit /static/index.html for the web UI."
-    }
+    return {"message": "AI Debate Arena running – open /static/index.html"}
 
 
-# ────────────────────────────────────────────
-# Dynamic model listing (Ollama live + static fallbacks)
-# ────────────────────────────────────────────
+# -------------------------------------------------------------------
+# List models
+# -------------------------------------------------------------------
 @app.get("/api/models")
 async def list_models(provider: str | None = Query(None)):
     try:
@@ -55,9 +46,9 @@ async def list_models(provider: str | None = Query(None)):
                 return JSONResponse({"models": models})
 
         mapping = {
-            "openai": ["gpt-4o-mini", "gpt-4-turbo", "gpt-4o"],
-            "groq": ["llama3-70b-8192", "mixtral-8x7b-32768", "gemma-7b-it"],
-            "anthropic": ["claude-3-haiku-20240307", "claude-3-sonnet-20240229"],
+            "openai": ["gpt-4o-mini", "gpt-4-turbo"],
+            "groq": ["llama3-70b-8192", "mixtral-8x7b-32768"],
+            "anthropic": ["claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
             "mistral": ["mistral-small", "mistral-medium"],
             "ollama": [],
         }
@@ -68,45 +59,49 @@ async def list_models(provider: str | None = Query(None)):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-# ────────────────────────────────────────────
-# NEW endpoint — build a continuation topic
-# ────────────────────────────────────────────
+# -------------------------------------------------------------------
+# Continuation builder  (unchanged)
+# -------------------------------------------------------------------
 @app.get("/api/continuation")
 def generate_continuation_round(limit: int = 1, round_no: int = 13):
-    """
-    Returns a topic string that includes the latest N debate transcripts
-    so the next run can 'build upon' previous work.
-    Query parameters:
-        limit  = number of rounds to pull from history
-        round_no = label for the next round
-    Example:
-        http://localhost:8000/api/continuation?limit=1&round_no=13
-    """
     last_rows = get_last_debate(limit)
     if not last_rows:
         return {"error": "No debates found."}
 
-    # Join multiple transcripts if limit > 1
     if isinstance(last_rows, list):
-        past_text = "\n\n".join(r[4] for r in reversed(last_rows))
+        past_text = "\n\n".join([r[4] for r in reversed(last_rows)])
     else:
         past_text = last_rows[4]
 
     new_task = (
         "Enhance the previous code into a complete SAF directory manager "
-        "using ACTION_OPEN_DOCUMENT_TREE with full CRUD and persistable permissions."
+        "with CRUD features using ACTION_OPEN_DOCUMENT_TREE."
     )
     topic = build_continuation_prompt(past_text, new_task, round_no)
-    return {"topic": topic}
+    return {"topic": topic, "length": len(topic)}
 
 
-# ────────────────────────────────────────────
-# WebSocket Debate — SAFE, DYNAMIC, UNBREAKABLE
-# ────────────────────────────────────────────
+# -------------------------------------------------------------------
+# Register topic → returns short token
+# -------------------------------------------------------------------
+@app.post("/api/register_topic")
+async def register_topic(payload: dict):
+    topic_text = payload.get("topic")
+    if not topic_text:
+        return {"error": "missing topic"}
+    token = secrets.token_hex(8)
+    TOPIC_CACHE[token] = topic_text
+    return {"token": token, "length": len(topic_text)}
+
+
+# -------------------------------------------------------------------
+# WebSocket debate
+# -------------------------------------------------------------------
 @app.websocket("/ws/debate")
 async def debate_endpoint(
     ws: WebSocket,
-    topic: str = Query(..., max_length=3000),             # extended size for continuation prompts
+    topic: str | None = Query(None),
+    token: str | None = Query(None),
     rounds: int = Query(6, ge=1, le=30),
     provider_a: str | None = Query(None),
     model_a: str | None = Query(None),
@@ -115,17 +110,29 @@ async def debate_endpoint(
     judge_provider: str | None = Query(None),
     judge_model: str | None = Query(None),
 ):
+    # --- retrieve large topic from cache if token provided
+    if not topic and token:
+        topic = TOPIC_CACHE.pop(token, "")
+    if not topic:
+        await ws.close(code=4000)
+        return
+
+    print("TOPIC length:", len(topic))
+    print(topic[:500])
+
     await ws.accept()
     session_id = str(uuid.uuid4())[:8]
 
     provider_a = provider_a or "ollama"
     model_a = model_a or "llama3:latest"
     provider_b = provider_b or "ollama"
-    model_b = model_b or "qwen2"
+    model_b = model_b or "qwen3-coder:30b"
     judge_provider = judge_provider or "ollama"
     judge_model = judge_model or "qwen3-coder:30b"
 
-    await ws.send_text(f"Session {session_id} | {rounds} rounds | Judge: {judge_model}\n\n")
+    await ws.send_text(
+        f"Session {session_id} | {rounds} rounds | Judge: {judge_model}\n\n"
+    )
 
     try:
         config = DebateConfig(
@@ -144,15 +151,14 @@ async def debate_endpoint(
             full_transcript += chunk
             await ws.send_text(chunk)
 
-        await ws.send_text("\n\nDebate saved to debates.db")
+        await ws.send_text("\n\nDebate saved to debates.db")
         log_debate(session_id, topic, full_transcript)
 
     except WebSocketDisconnect:
-        print(f"[{session_id}] Client disconnected")
+        print(f"[{session_id}] Client disconnected")
     except Exception as e:
-        error_msg = f"\nSERVER ERROR: {e}\n"
+        error_msg = f"\nSERVER ERROR: {e}\n"
         await ws.send_text(error_msg)
-        full_transcript += error_msg
-        log_debate(session_id, topic, full_transcript)
+        log_debate(session_id, topic, error_msg)
     finally:
         await ws.close()
