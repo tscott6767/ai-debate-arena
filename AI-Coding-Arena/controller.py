@@ -1,98 +1,139 @@
 # controller.py
 import asyncio
-import re  # NEW: For code extraction
+import re
 from judge import run_judgment
-from prompts import get_side_prompt  # NEW: Import modular prompts
+from prompts import get_side_prompt
 
-MAX_HISTORY = 20  # UPDATED: Increased for longer coding sessions
+MAX_HISTORY = 24  # Keeps context manageable without ballooning memory
+
 
 class DebateController:
-    """
-    Orchestrates the back-and-forth debate rounds between two model adapters,
-    then invokes the AI judge for the final verdict.
-    """
     def __init__(self, config, session_id: str):
         self.config = config
         self.session_id = session_id
-        self.history = []  # shared history context
-        self.transcript_parts = [f"🧩 Topic: {config.topic}\n\n"]
+        self.history = []
+        self.transcript_parts = [
+            f"DEBATE SESSION: {session_id}\n"
+            f"TOPIC: {config.topic[:500]}{'...' if len(config.topic) > 500 else ''}\n"
+            f"ROUNDS: {config.rounds} | JUDGE: {config.judge_model}\n"
+            + "=" * 80 + "\n\n"
+        ]
 
-    def extract_code_content(self, response: str) -> str:
-        """NEW: Extract only code blocks from response to clean history."""
-        # Simple regex for markdown code blocks (```java
-        matches = re.findall(r'```(?:\w+)?\n(.*?)\n```', response, re.DOTALL)
-        if matches:
-            return '\n\n'.join(matches)
-        # Fallback: If no code, return empty (will trigger correction)
-        return ''
+    # ------------------------------------------------------------------
+    @staticmethod
+    def extract_code_blocks(text: str) -> str:
+        """Extract all code segments from markdown, even malformed ones."""
+        blocks = re.findall(r"```[^\n]*\n(.*?)\n```", text, re.DOTALL)
+        if not blocks:
+            blocks = re.findall(r"```(.*?)```", text, re.DOTALL)
+        if not blocks:
+            if any(kw in text.lower() for kw in ["public class", "def ", "function ", "import ", "const ", "#include"]):
+                lines = []
+                for line in text.splitlines():
+                    if (
+                        line.startswith(("    ", "\t", "  "))
+                        or any(line.strip().startswith(p)
+                               for p in ["public", "class", "def", "import", "from", "const", "function", "#"])
+                    ):
+                        lines.append(line.strip())
+                if lines:
+                    return "\n".join(lines[:200])  # Avoid runaway transcripts
+        return "\n\n".join(block.strip() for block in blocks) if blocks else ""
 
+    # ------------------------------------------------------------------
     async def run(self):
-        """Main debate execution coroutine (async generator)."""
-        yield f"Session {self.session_id}\n\n"
-        # Define two participants
+        """Main debate loop. Streams output to websocket layer."""
+        yield self.transcript_parts[0]
+
         speakers = [
-            (self.config.adapter_a, "A", "for (Side A)"),
-            (self.config.adapter_b, "B", "against (Side B)"),
+            (self.config.adapter_a, "A", "FOR the solution — build and improve the code"),
+            (self.config.adapter_b, "B", "AGAINST — critique, fix bugs, and propose better alternatives"),
         ]
         turn = 0
-        # ── Debate Rounds ───────────────────────────────────────────────
-        for r in range(1, self.config.rounds + 1):
+        last_a = ""
+        last_b = ""
+
+        for round_num in range(1, self.config.rounds + 1):
             adapter, side, stance = speakers[turn]
-            # UPDATED: Use modular prompt template
-            role_instruction = get_side_prompt(self.config.topic, side, stance)
-            round_messages = [{"role": "system", "content": role_instruction}]
-            round_messages += self.history[-MAX_HISTORY:]
-            yield f"\n{side} Round {r} — {adapter.name} (Side {side}) {stance}\n"
-            tokens = []
+            prompt = get_side_prompt(self.config.topic, side, stance, round_num)
+
+            messages = [{"role": "system", "content": prompt}] + self.history[-MAX_HISTORY:]
+            yield f"\n{'='*20} ROUND {round_num} | SIDE {side} | {adapter.name.upper()} {'='*20}\n"
+
+            full_response = ""
             try:
-                async for tok in adapter.stream(round_messages):
-                    tokens.append(tok)
-                    yield tok
+                async for chunk in adapter.stream(messages):
+                    text_chunk = str(chunk)
+                    full_response += text_chunk
+                    yield text_chunk
+                yield "\n\n"
             except Exception as e:
-                err_msg = f"\n[{adapter.name} ERROR: {e}]\n"
-                yield err_msg
-                self.transcript_parts.append(err_msg)
+                error = f"\n[CRITICAL ERROR in {adapter.name}: {e}]\n"
+                yield error
+                self.transcript_parts.append(error)
+                turn = 1 - turn
                 continue
-            yield "\n\n"
-            response = "".join(tokens)
-            self.transcript_parts.append(response + "\n\n")
-            # UPDATED: Extract code for cleaner history append
-            code_content = self.extract_code_content(response)
-            if not code_content:
-                # NEW: Correct hallucinations with targeted user message
-                user_msg = "Your previous response contained no valid code. Output ONLY complete, compiling source files as per the rules."
+
+            self.transcript_parts.append(full_response + "\n\n")
+
+            # ---------------------------------------------------------
+            # Track final outputs per side for the judge
+            if side == "A":
+                last_a = full_response
+            else:
+                last_b = full_response
+
+            # ---------------------------------------------------------
+            # Extract & validate code
+            code = self.extract_code_blocks(full_response)
+            if not code.strip():
+                correction = (
+                    "WARNING: Your response contained NO valid code blocks.\n"
+                    "You are in a coding debate. You MUST reply with full, syntax‑correct source code "
+                    "inside ``` blocks. No explanations outside code. No apologies. Try again."
+                )
                 self.history.extend([
-                    {"role": "assistant", "content": response},  # Keep raw for transcript
-                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": full_response},
+                    {"role": "user", "content": f"{side}-MODEL CORRECTION:\n" + correction}
                 ])
+                yield "JUDGE INTERVENTION: Invalid response — model forced to correct.\n"
             else:
                 self.history.extend([
-                    {"role": "assistant", "content": code_content},  # Clean code only
-                    {"role": "user", "content": "Please improve the project code/structure with the next iteration of your reply."},
+                    {"role": "assistant", "content": code},
+                    {"role": "user", "content": f"Round {round_num + 1}: Improve full project. Fix bugs, add features, enhance structure."}
                 ])
+                yield f"Valid code extracted ({len(code.splitlines())} lines). Project evolving...\n"
+
             self.history = self.history[-MAX_HISTORY:]
-            turn = 1 - turn  # alternate sides
-        # === FINAL WORKING JUDGMENT PHASE (USE THIS) ===
-        yield "\n\nJUDGE SUMMONED... The AI Judge is deliberating...\n\n"
+            turn = 1 - turn
+            await asyncio.sleep(0.1)
+
+        # =====================================================
+        # Final judgment
+        yield "\n\nJUDGE INVOKED — FINAL VERDICT INCOMING...\n" + "—"*60 + "\n"
 
         try:
-            full_transcript = "".join(self.transcript_parts)
+            pre_judge_transcript = "".join(self.transcript_parts)
 
+            # Pass the final outputs from A and B to the judge
             async for token in run_judgment(
-                a=self.config.adapter_a,
-                b=self.config.adapter_b,
-                transcript=full_transcript,
+                a=last_a,
+                b=last_b,
+                transcript=pre_judge_transcript,
                 topic=self.config.topic,
                 provider=self.config.judge_provider,
                 model=self.config.judge_model
             ):
-                yield token
-                self.transcript_parts.append(token)
+                yield str(token)
+                self.transcript_parts.append(str(token))
+
+            final_transcript = "".join(self.transcript_parts)
+            self.transcript_parts = [final_transcript]
+            yield "\n\nDEBATE COMPLETE. FINAL CODEBASE LOCKED. VERDICT RENDERED.\n"
 
         except Exception as e:
-            error_msg = f"\n[JUDGE ERROR: {e}]\n"
-            yield error_msg
-            self.transcript_parts.append(error_msg)
+            err = f"\nJUDGE FAILED: {e}\nDEBATE ENDED WITHOUT FINAL VERDICT.\n"
+            yield err
+            self.transcript_parts.append(err)
 
-        yield "\n\nCase closed."
-        # === END ===
+        yield f"\n\nSession {self.session_id} — Archived.\n"

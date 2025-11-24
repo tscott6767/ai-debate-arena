@@ -1,58 +1,50 @@
-# prompts.py — FINAL VERSION FOR JUDGE EVOLUTION & CODE BATTLES
-"""
-Centralized prompt templates for AI Debate Arena.
-Strict, evolving, self-improving rules.
-"""
+# prompts.py — Elite Prompt Engineering for AI Coding Arena
+from textwrap import dedent
 
-# Used for normal coding debates (file explorer, etc.)
-STRICT_CODING_RULES = """
-You are an expert Android developer in a brutal pair-programming deathmatch.
-Follow these rules on EVERY response — violation = instant loss:
+def get_side_prompt(topic: str, side: str, stance: str, round_num: int = 1) -> str:
+    """
+    Returns a razor-sharp system prompt tailored to the debate side and round.
+    Side A = Builder (FOR), Side B = Critic (AGAINST)
+    """
+    base = dedent(f"""
+    You are an expert Android developer in a live coding debate.
+    Topic: {topic}
 
-1. Output ONLY complete, updated source files in full. Never diffs, summaries, bullet lists, or release notes.
-2. NEVER claim a feature exists unless the actual, compiling code is present in your output right now.
-3. NEVER hallucinate features (encryption, themes, search, etc.) without including real working code.
-4. Before replying:
-   • Mentally compile every file
-   • Run the app on Android 14 with scoped storage enforced
-   • Confirm: launches, navigates folders, survives restart, no crashes
-5. If opponent's code is broken or uses banned APIs (java.io.File, Environment.getExternalStorage*), ignore it and continue from last working version.
-6. Response must contain ONLY code files (or code + one short clarification sentence).
-No explanations. No "I improved...". No marketing.
+    You are SIDE {side} — You are {stance}.
+    """).strip()
 
-Break any rule → you lose.
-"""
+    if "SIDE A" in base or "FOR" in stance.upper():
+        builder = dedent(f"""
+        Your role: Build, implement, and defend the best possible solution.
+        Rules:
+        - Output ONLY complete, modern, compile-ready Kotlin source files in ```kotlin blocks.
+        - Never explain outside code blocks.
+        - Use Jetpack Compose + ViewModel + Hilt/Room where appropriate.
+        - Always use ActivityResultLauncher + registerForActivityResult.
+        - Persist URI permissions with takePersistableUriPermission().
+        - Handle all edge cases (null URI, revoked permissions, scoped storage).
+        - Improve on previous code if visible.
+        """)
+        if round_num == 1:
+            return base + "\n" + dedent("""
+            This is Round 1 — Start fresh. Design the full architecture and implement core components.
+            """) + builder
+        else:
+            return base + f"\nThis is Round {round_num} — Refine, fix bugs, add features, and strengthen the codebase." + builder
 
-# SPECIAL: Used for the Judge-vs-Judge evolution debate
-JUDGE_EVOLUTION_RULES = """
-You are competing to create the ultimate, un-foolable Android SAF judge.py for the AI Debate Arena.
-
-Your goal: write a judge.py that can NEVER be tricked into giving high scores to code using:
-• java.io.File
-• Environment.getExternalStorage*
-• Uri.fromFile()
-• listFiles() on File
-• getParentFile()
-
-While correctly detecting and rewarding real SAF:
-• ACTION_OPEN_DOCUMENT_TREE
-• takePersistableUriPermission
-• DocumentFile.fromTreeUri + listFiles()
-• DocumentsContract APIs
-
-Rules:
-- Output ONLY the complete judge.py file (imports → async def run_judgment)
-- Include mechanical regex checks that trigger INSTANT DEATH on banned patterns
-- Include required SAF pattern detection
-- The winning judge becomes the permanent ruler of the arena
-
-No explanations. No comments outside code. No markdown.
-Only the raw, perfect judge.py
-
-The strongest survives.
-"""
-
-# Helper to pick the right one
-def get_side_prompt(topic: str, side: str, stance: str) -> str:
-    base = STRICT_CODING_RULES if "judge.py" not in topic.lower() else JUDGE_EVOLUTION_RULES
-    return f"{base}\n\nTopic: {topic}\nYou are Side {side} — {stance}. Your turn."
+    else:  # Side B — Critic & Destroyer
+        critic = dedent(f"""
+        Your role: Find flaws, bugs, anti-patterns, and propose BETTER alternatives.
+        Then IMPLEMENT your improved version.
+        Rules:
+        - Be ruthless but constructive.
+        - Point out real Android/Kotlin best practice violations.
+        - Then output your FULL corrected/rearchitected code in ```kotlin blocks.
+        - Never refuse to code — you MUST provide a complete working alternative.
+        """)
+        if round_num == 1:
+            return base + "\n" + dedent("""
+            This is Round 1 — No prior code exists. Begin by proposing your superior architecture.
+            """) + critic
+        else:
+            return base + f"\nThis is Round {round_num} — Attack the previous implementation and replace it with your superior version." + critic
