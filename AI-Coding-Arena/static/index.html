@@ -2,62 +2,144 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AI Debate Arena</title>
   <style>
-    body { background:#000; color:#0f9; font-family:'Courier New', monospace; margin:0; padding:20px; }
-    h1 { text-align:center; margin-bottom:20px; }
-    .panel { text-align:center; margin:15px 0; }
+    :root {
+      --glow: #0f9;
+      --bg: #000;
+      --dark: #001;
+      --mid: #111;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--glow);
+      font-family: 'Courier New', monospace;
+      margin: 0;
+      padding: 20px;
+      line-height: 1.5;
+    }
+
+    h1 {
+      text-align: center;
+      margin: 30px 0;
+      text-shadow: 0 0 10px var(--glow);
+    }
+
+    .panel {
+      text-align: center;
+      margin: 20px auto;
+      max-width: 960px;
+    }
+
     textarea, input, select, button {
-      background:#111; color:#0f9; border:1px solid #0f9; padding:8px;
-      font-family:inherit; font-size:1em; margin:4px;
+      background: var(--mid); /* ✅ fixed typo */
+      color: var(--glow);
+      border: 1px solid var(--glow);
+      padding: 10px;
+      font-family: inherit;
+      font-size: 1em;
+      margin: 6px;
+      border-radius: 4px;
     }
-    textarea { width:80%; max-width:900px; height:120px; resize:vertical; }
-    button { cursor:pointer; font-weight:bold; padding:10px 20px; }
-    button:hover { background:#0f9; color:#000; }
+
+    textarea {
+      width: 90%;
+      max-width: 900px;
+      height: 140px;
+      resize: vertical;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: bold;
+      padding: 12px 24px;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      background: var(--glow);
+      color: #000;
+      box-shadow: 0 0 15px var(--glow);
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button.danger {
+      border-color: #f55;
+      color: #f55;
+    }
+
+    button.danger:hover {
+      background: #f55;
+      color: #000;
+    }
+
     #log {
-      background:#001; border:1px solid #0f9; padding:15px; min-height:60vh; margin-top:20px;
-      overflow-y:auto; white-space:pre-wrap; font-size:0.95em; line-height:1.4;
+      background: var(--dark);
+      border: 2px solid var(--glow);
+      padding: 20px;
+      min-height: 65vh;
+      margin: 30px auto;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-size: 0.98em;
+      line-height: 1.5;
+      border-radius: 8px;
+      box-shadow: 0 0 20px rgba(0,255,100,0.2);
     }
-    .label { color:#0bc; font-weight:bold; }
-    .status { color:#ff0; font-size:0.9em; margin-left:10px; }
+
+    .label { color: #0bc; font-weight: bold; }
+    .status { color: #ff0; font-size: 1.1em; margin-left: 15px; font-weight: bold; }
+    .controls { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin: 20px 0; }
+    .tag { background: #003; padding: 4px 10px; border-radius: 4px; font-size: 0.8em; }
   </style>
 </head>
 <body>
-  <h1>AI Debate Arena</h1>
+  <h1>AI DEBATE ARENA</h1>
 
   <div class="panel">
-    <div class="label">Debate Topic (auto‑fetched continuation):</div><br>
-    <textarea id="topic" placeholder="The latest transcript will appear here..."></textarea>
+    <div class="label">Debate Topic (auto-continued from last round)</div>
+    <textarea id="topic" placeholder="Fetching latest continuation..."></textarea>
   </div>
 
   <div class="panel">
     <span class="label">Rounds:</span>
-    <input id="rounds" type="number" min="1" max="50" value="12" style="width:70px;">
-  </div>
-
-  <div class="panel"><b>Side A</b><br>
-    <span class="label">Provider:</span><select id="providerA" onchange="loadModels('A')"></select>
-    <span class="label">Model:</span><select id="modelA"></select>
-  </div>
-  <div class="panel"><b>Side B</b><br>
-    <span class="label">Provider:</span><select id="providerB" onchange="loadModels('B')"></select>
-    <span class="label">Model:</span><select id="modelB"></select>
-  </div>
-  <div class="panel"><b>Judge</b><br>
-    <span class="label">Provider:</span><select id="providerJudge" onchange="loadModels('Judge')"></select>
-    <span class="label">Model:</span><select id="modelJudge"></select>
-  </div>
-
-  <div class="panel">
-    <button id="start-btn">START DEBATE</button>
+    <input id="rounds" type="number" min="1" max="50" value="12" style="width:80px;">
     <span id="status" class="status">Ready</span>
   </div>
 
-  <div id="log"></div>
+  <div class="panel"><b>Side A (Pro)</b>
+    <select id="providerA" onchange="loadModels('A')"></select>
+    <select id="modelA"></select>
+  </div>
+  <div class="panel"><b>Side B (Con)</b>
+    <select id="providerB" onchange="loadModels('B')"></select>
+    <select id="modelB"></select>
+  </div>
+  <div class="panel"><b>Judge</b>
+    <select id="providerJudge" onchange="loadModels('Judge')"></select>
+    <select id="modelJudge"></select>
+  </div>
+
+  <div class="controls">
+    <button id="start-btn">START DEBATE</button>
+    <button id="stop-btn" class="danger" style="display:none;">STOP DEBATE</button>
+    <button id="clear-btn">Clear Log</button>
+    <button id="export-btn">Export Transcript</button>
+  </div>
+
+  <!-- ✅ Replaced literal '\n' with an actual line break -->
+  <div id="log">AI Debate Arena initialized. Click "START DEBATE" to begin.<br></div>
 
   <script>
     const logEl = document.getElementById('log');
     const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
     let ws = null;
 
     function appendLog(text) {
@@ -65,99 +147,113 @@
       logEl.scrollTop = logEl.scrollHeight;
     }
 
+    function setStatus(txt, color = "#ff0") {
+      statusEl.textContent = txt;
+      statusEl.style.color = color;
+    }
+
     async function loadProviders() {
       try {
         const res = await fetch('/api/models');
         const data = await res.json();
-        const providers = Object.keys(data);
-        ['A','B','Judge'].forEach(s => {
-          const p = document.getElementById('provider'+s);
-          const m = document.getElementById('model'+s);
-          p.innerHTML = "";
-          providers.forEach(x => p.appendChild(new Option(x,x)));
-          if (providers.length) {
-            p.value = providers[0];
-            loadModels(s);
-          }
+        const providers = Object.keys(data.providers || data);
+        ['A', 'B', 'Judge'].forEach(side => {
+          const sel = document.getElementById('provider' + side);
+          sel.innerHTML = "<option>Loading...</option>";
+          providers.forEach(p => sel.appendChild(new Option(p.toUpperCase(), p)));
+          sel.value = "ollama";
+          loadModels(side);
         });
-      } catch(e) {
-        appendLog("Failed to load providers — server may be offline.\n");
+      } catch (e) {
+        appendLog("Failed to load providers — is backend running?\n");
+        setStatus("Backend offline", "#f55");
       }
     }
 
-    async function loadModels(s) {
-      const prov = document.getElementById('provider'+s).value;
-      const m = document.getElementById('model'+s);
-      m.innerHTML = "<option>Loading...</option>";
-      if (!prov) return;
-      const res = await fetch(`/api/models?provider=${prov}`);
-      const json = await res.json();
-      m.innerHTML = "";
-      (json.models || []).forEach(x => m.appendChild(new Option(x,x)));
-      if (json.models?.length) m.value = json.models[0];
+    async function loadModels(side) {
+      const prov = document.getElementById('provider' + side).value;
+      const modelSel = document.getElementById('model' + side);
+      modelSel.innerHTML = "<option>Loading models...</option>";
+      try {
+        const res = await fetch(`/api/models?provider=${prov}`);
+        const json = await res.json();
+        modelSel.innerHTML = "";
+        (json.models || []).forEach(m => modelSel.appendChild(new Option(m, m)));
+        if (json.models?.length) modelSel.value = json.models[0];
+      } catch (e) {
+        modelSel.innerHTML = "<option>Error loading</option>";
+      }
     }
 
-    // ------------------------------------------------------------
-    // Token‑based Option A: fetch continuation + register + start
-    // ------------------------------------------------------------
     document.getElementById('start-btn').onclick = async () => {
       if (ws) ws.close();
+      stopBtn.style.display = "inline-block";
+      startBtn.disabled = true;
+      logEl.textContent = "Fetching continuation topic...\n";
+      setStatus("Preparing debate...", "#0cf");
 
       try {
-        statusEl.textContent = "Fetching continuation...";
-        appendLog("Fetching continuation topic...\n");
+        // ✅ dynamic round number instead of hard-coded 13
+        const roundsVal = document.getElementById('rounds').value || 12;
+        const contRes = await fetch(`/api/continuation?limit=3&round_no=${roundsVal}`);
+        const cont = await contRes.json();
+        if (!cont.topic) throw "No continuation available";
 
-        const contRes = await fetch('/api/continuation?limit=1&round_no=13');
-        const contData = await contRes.json();
-        if (!contData.topic) {
-          appendLog("No continuation topic.\n");
-          statusEl.textContent = "No topic";
-          return;
-        }
+        const topicBox = document.getElementById('topic');
+        const manual = topicBox.value.trim();
+        topicBox.value = manual ? manual + "\n\n" + cont.topic : cont.topic;
 
-        // Combine any manual prompt with continuation
-        const box = document.getElementById('topic');
-        const existing = box.value.trim();
-        box.value = existing ? existing + "\n\n" + contData.topic : contData.topic;
-
-        // Register topic (POST) to get short token
         const reg = await fetch('/api/register_topic', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ topic: box.value })
+          body: JSON.stringify({ topic: topicBox.value })
         });
-        const regData = await reg.json();
-        if (!regData.token) {
-          appendLog("Topic registration failed.\n");
-          return;
-        }
-        const token = regData.token;
+        const { token } = await reg.json();
 
-        const defaults = { provider: "ollama", model: "llama3" };
-        const val = id => document.getElementById(id).value ||
-                          defaults[id.includes('provider') ? 'provider' : 'model'];
-
-        const url = `ws://${location.host}/ws/debate`
-          + `?token=${token}`
-          + `&rounds=${document.getElementById('rounds').value||12}`
-          + `&provider_a=${val('providerA')}&model_a=${val('modelA')}`
-          + `&provider_b=${val('providerB')}&model_b=${val('modelB')}`
-          + `&judge_provider=${val('providerJudge')}&judge_model=${val('modelJudge')}`;
+        const protocol = location.protocol === "https:" ? "wss://" : "ws://";
+        const url = new URL(protocol + location.host + "/ws/debate");
+        url.searchParams.append("token", token);
+        url.searchParams.append("rounds", roundsVal);
+        ["A", "B", "Judge"].forEach(s => {
+  const lower = s.toLowerCase();
+  url.searchParams.append(`provider_${lower}`, document.getElementById('provider' + s).value);
+  url.searchParams.append(`model_${lower}`, document.getElementById('model' + s).value);
+});
 
         ws = new WebSocket(url);
-        logEl.textContent = "Connecting...\n";
-        statusEl.textContent = "Connecting...";
 
-        ws.onopen = () => { statusEl.textContent="Debate STARTED"; appendLog("Connected — debate running...\n"); };
+        ws.onopen = () => {
+          setStatus("DEBATE IN PROGRESS", "#0f9");
+          appendLog("\nCONNECTED — Debate started!\n\n");
+        };
         ws.onmessage = e => appendLog(e.data);
-        ws.onclose  = () => statusEl.textContent="Finished";
-        ws.onerror  = () => statusEl.textContent="Error — check console";
+        ws.onclose = () => {
+          setStatus("Debate finished", "#0f9");
+          stopBtn.style.display = "none";
+          startBtn.disabled = false;
+        };
+        ws.onerror = () => setStatus("Connection error", "#f55");
+
       } catch (err) {
-        appendLog("Start debate failed: " + err + "\n");
-        statusEl.textContent = "Error";
+        appendLog("Failed to start: " + err + "\n");
+        setStatus("Error", "#f55");
+        startBtn.disabled = false;
+        stopBtn.style.display = "none";
       }
     };
 
+    stopBtn.onclick = () => { if (ws) ws.close(); };
+    document.getElementById('clear-btn').onclick = () => logEl.textContent = "";
+    document.getElementById('export-btn').onclick = () => {
+      const blob = new Blob([logEl.textContent], {type: "text/plain"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `debate_${new Date().toISOString().slice(0,19)}.txt`;
+      a.click();
+    };
+
+    // Auto-load providers on start
     loadProviders();
   </script>
 </body>
