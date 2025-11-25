@@ -60,7 +60,26 @@ FastAPI endpoint for submissions and live results streaming.
 README.md
 This file — manifesto + roadmap.
 
+🧠 New Autonomous Infrastructure (2025 Update)
 
+AI Coding Arena now runs fully self‑contained, with the following new subsystems:
+
+- 🧩 **Autonomous Continuation Engine** — Each new battle automatically loads the previous transcript from `debates.db`, allowing projects to evolve over days or weeks without manual reset.
+
+- 🔑 **Token Registration System** — `/api/register_topic` creates short tokens for very large topics (> 50 kB) to avoid URL length errors during WebSocket startup.  
+  Battles now begin with `ws://<host>/ws/debate?token=<token>&rounds=N`.
+
+- 🔄 **Continuation API** — `/api/continuation` exposes the most recent judge verdict and code for seamless sequels and autonomous re‑prompts.
+
+- ⚖️ **Judge Intervention Protocol** — If a model returns text or the wrong language, the controller interjects, forces a regeneration, and re‑feeds a correction message automatically.
+
+- 🏆 **Winning Code Extraction** — After verdict, the Arena automatically writes the last fenced code block from the winning side to `static/winning_code_<session_id>.txt` for archival or deployment.
+
+- 💾 **Persistent SQLite Archive** — Every session (topic + transcript + verdict) is logged in `debates.db`, supporting continuation, leaderboards, and cross‑session analysis.
+
+- 💻 **Browser Web Interface v2** — Enhanced `index.html` now handles tokenized topics, file‑size safe uploads, and live judge streaming through WebSocket.
+
+These additions turn the Arena from a manual competition sandbox into a true *autonomous software evolution environment* capable of running endlessly
 
 
 🔄 Autonomous Ref‑Feed System
@@ -147,6 +166,11 @@ This confirms the previous transcript was loaded successfully.
 [x] Verdict parser extracts structured feedback.
 [x] Re‑feed system auto‑inserts Judge assessment into next model prompt.
 [x] Run continuous evolution rounds until stability.
+[x] Token registration and continuation APIs enable autonomous multi‑session runs.  
+[x] Judge intervention handles invalid model outputs without human assistance.  
+[x] Winning code extraction creates deployable artifacts for each session.  
+[x] Autonomous continuation engine links debates over time → self‑evolving projects.
+
 ### Phase III — Beyond Regex (🧠 Planned)
 [ ] Integrate AST‑based analyzers (JavaParser / Kotlin KSP).
 [ ] Dockerized Gradle build to confirm actual compilation & APK build.
@@ -190,3 +214,101 @@ The end game is an autonomous software ecosystem where AI ag
 python controller.py
 
 AI Coding Arena — The future of autonomous software evolution
+🚀 How to Use AI Coding Arena to Build Code
+AI Coding Arena lets two code‑generation models debate a project idea while a third model acts as a judge.  Each run creates or improves code, and the judge decides which side produced the stronger implementation.
+1️⃣ Start the server
+cd ~/Downloads/ai-debate-arena-main/AI-Coding-Arena
+python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+Then open your browser at
+http://localhost:8000/static/index.html
+
+2️⃣ Choose your models
+At the top of the web page:
+
+Side A – main implementer (e.g. qwen2‑coder:14b‑instruct)
+Side B – reviewer/improver (e.g. mistral:8x7b‑instruct)
+Judge – evaluator (e.g. qwen3‑coder:30b)
+
+You can change them every run—each debate is stored separately.
+
+3️⃣ Enter a topic (the task)
+Paste your prompt into the Debate Topic box, e.g.:
+Before implementation, summarise what you understood from the previous transcript.
+If you do not see any PREVIOUS TRANSCRIPT section, output "I do not see it" and stop.
+
+Implement a complete Android Storage Access Framework (SAF) app:
+– Launch folder picker with ActivityResultLauncher + ACTION_OPEN_DOCUMENT_TREE
+– Persist permissions with takePersistableUriPermission()
+– Perform CRUD operations using DocumentFile
+– Include a UI (Compose or XML)
+The Judge penalises any non‑Android languages or missing items.
+
+
+4️⃣ Run and watch the debate
+Press START DEBATE.
+You’ll see streaming output:
+==================== ROUND 1 | SIDE A ====================
+Valid code extracted (182 lines). Project evolving...
+
+...
+JUDGE INVOKED — FINAL VERDICT INCOMING...
+SAF COMPLETE — found 4/4 critical patterns
+Winner: Side B
+
+
+“Valid code extracted…” → the app detected fenced code and accepted it.
+“JUDGE INTERVENTION…” → formatting problems; the model was asked to retry.
+The final verdict tells you which side’s code “won.”
+
+
+5️⃣ Continue improving
+After every run the database debates.db saves the whole transcript and verdict.
+To extend an existing project just start another debate—the system automatically loads the last session as context.
+
+6️⃣ Find your results
+
+Full debates: stored in debates.db
+Judged winning code (optional):
+static/winning_code_<session_id>.txt
+Inspect recent runs:
+sqlite3 debates.db "SELECT id, timestamp, topic FROM debates ORDER BY id DESC LIMIT 5;"
+
+
+
+7️⃣ Typical workflow
+
+Brainstorm or import a task description.
+Run a short debate (3–6 rounds).
+Review the judged code.
+Launch another debate to refine the same project or switch models to compare results.
+
+
+💡 Tips
+
+
+
+Use‑case
+Recommendation
+
+
+
+
+Starting fresh idea
+Write a descriptive topic that defines deliverables.
+
+
+Continuing existing code
+Simply press START DEBATE; continuation loads automatically.
+
+
+Comparing models
+Change Side A or B; keep the same task.
+
+
+Backup data
+Copy debates.db — it contains every session transcript and verdict.
+
+
+
+
