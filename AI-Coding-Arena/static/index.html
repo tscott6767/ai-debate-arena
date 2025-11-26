@@ -195,9 +195,13 @@
       try {
         // ✅ dynamic round number instead of hard-coded 13
         const roundsVal = document.getElementById('rounds').value || 12;
-        const contRes = await fetch(`/api/continuation?limit=3&round_no=${roundsVal}`);
-        const cont = await contRes.json();
-        if (!cont.topic) throw "No continuation available";
+const contRes = await fetch(`/api/continuation?limit=1`);
+const cont = await contRes.json();
+if (!cont.topic) {
+  appendLog("No previous debate found — starting fresh.\n");
+  cont.topic = "";
+}
+
 
         const topicBox = document.getElementById('topic');
         const manual = topicBox.value.trim();
