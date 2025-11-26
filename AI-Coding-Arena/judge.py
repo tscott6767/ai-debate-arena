@@ -40,6 +40,7 @@ If REQUIRED < 3 → max 2/10 for SAF usage
 Then give normal verdict.
 
 Code:
+{code}
 
 Use exact table. Be brutal.
 """
@@ -60,15 +61,15 @@ Critical Bugs: • Used banned java.io.File / legacy storage APIs"""
         return
 
     system_prompt = JUDGE_PROMPT.format(
-        final_code=code,
         banned=banned,
-        required=required
+        required=required,
+        code=code
     )
 
     judge = get_adapter(provider, model)
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Judge the final code. Side A: {a.name} | Side B: {b.name}"}
+        {"role": "user", "content": "Judge the final code. Compare both implementations and declare a winner."}
     ]
 
     async for token in judge.stream(messages):
