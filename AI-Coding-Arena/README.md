@@ -290,7 +290,8 @@ Launch another debate to refine the same project or switch models to compare res
 
 Use‑case
 Recommendation
-
+Make it yours. Ask an Ai to help build the inital prompt for you task. Get the AI to help you modify judge.py to assess the code.
+Use your imagination, there is no limit.
 
 
 
