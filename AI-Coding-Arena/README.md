@@ -16,7 +16,7 @@ Each Round:
 5. Models iterate, improve, and compete until only stable, compiling code remains.
 Over time the Arena becomes a self‑contained autonomous coding ecosystem:
 LLMs → produce → tested → scored → re‑prompted → refined.
-
+*** added dueling version --- controller.py.dueling , use this if you want the LLMs to see and know what the other said. Results will vary with the prompt.
 ⚔️ Rules of Combat (Android Edition)
 The Judge executes immediately for:
 
