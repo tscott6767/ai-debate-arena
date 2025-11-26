@@ -68,7 +68,7 @@ Critical Bugs: • Used banned java.io.File / legacy storage APIs"""
     judge = get_adapter(provider, model)
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Judge the final code. Side A: {a.name} | Side B: {b.name}"}
+        {"role": "user", "content": "Judge the final code. Compare both implementations and declare a winner."}
     ]
 
     async for token in judge.stream(messages):
