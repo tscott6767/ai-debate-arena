@@ -1,0 +1,59 @@
+Task : Play Store‑Ready Scoped Storage File Manager (Stable Evolution Run)
+Transform the existing, working Android 14 Scoped Storage (SAF) file manager into a secure, modern, and Play Store‑ready product while preserving every correct behavior from previous peak from  ROUND 4 | SIDE B | QWEN3-CODER:30B  below .
+Foundational Rules — Non‑Negotiable
+Keep Jetpack Compose UI + Material 3.
+Do not revert to XML, RecyclerView, or Fragments.
+Use ActivityResultLauncher / registerForActivityResult.
+Never use the deprecated startActivityForResult().
+Use DocumentFile APIs only.
+Never use java.io.File or Uri.parse(documentId).
+Always use DocumentFile.fromTreeUri() / DocumentFile.fromSingleUri() / DocumentsContract.buildDocumentUriUsingTree().
+Preserve persistable permissions, directory state, and existing Compose‑MVVM structure.
+No blocking I/O on the main thread.
+Use coroutines and Dispatchers.IO.
+Core Goals
+Security & Encryption
+Add AES‑256‑GCM encryption and decryption for all read/write operations.
+Derive keys via PBKDF2.
+Store the master key securely in Android KeyStore.
+Offline‑first Caching
+Cache document metadata (Room or DataStore) so lists remain available offline.
+Clean Architecture
+Maintain full MVVM with Repository layer, @HiltViewModel, and Hilt‑injected dependencies.
+UX & Error Handling
+Material 3 dynamic color and dark‑mode support.
+Snackbars or Dialogs for permission revokes, I/O failures, invalid URIs.
+All Compose UI built with StateFlow / rememberSaveable patterns.
+Testing
+Include basic unit tests for Repository functions and encryption utilities.
+Feature Enhancements
+True folder navigation — click a directory to enter and list its children (DocumentFile.findFile() per level).
+Rename files and folders (DocumentFile.renameTo()).
+Open and view text files in a Compose reader and edit then save.
+Multiple persisted URIs — store and display a list of authorized folders and switch between them.
+Connect readDocument() / writeDocument() fully to UI actions.
+Preserve explicit SAF workflow:
+OpenDocumentTree → takePersistableUriPermission → CreateDocument → listFiles.
+Implementation Guidelines
+Build on the known good codebase below ; do not restart from scratch.
+Retain all working functions; improve instead of rewriting.
+Produce complete, syntax‑correct Kotlin source for every module inside kotlin fences.
+Target compileSdkVersion = 34 / targetSdkVersion = 34 — Play Store ready.
+Document any new files or classes clearly with KDoc comments.
+Judge Scoring Metrics
+Criterion
+Description
+1. SAF Workflow Correctness (40%)
+Uses modern storage APIs with no legacy calls.
+2. Architecture Integrity (25%)
+MVVM + Hilt, Repository pattern, Compose state flows.
+3. Security Integration (20%)
+AES‑GCM / KeyStore / no plaintext I/O.
+4. UX & Error Handling (10%)
+ Material 3 theme, dialogs, dark mode support.
+5. Testing (5%)
+ Basic unit tests compile and run.
+Violations of banned APIs or deprecated patterns will subtract points rather than terminate the run outright, allowing graceful recovery.
+ Purpose
+Create a stable evolutionary continuation from the best prior generation that cannot backslide into legacy Android code.
+The result should be a secure, Compose‑based, Play Store‑ready Scoped Storage file manager that compiles cleanly on Android Studio Koala or newe
