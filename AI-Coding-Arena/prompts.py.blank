@@ -1,0 +1,18 @@
+# prompts.py — Minimal Prompt Wrapper for AI Debate Arena
+from textwrap import dedent
+
+def get_side_prompt(topic: str, side: str, stance: str, round_num: int = 1) -> str:
+    """
+    Returns either the raw topic (if it already contains SIDE A/B)
+    or a minimal wrapper for short tasks.
+
+    This prevents double‑wrapping when the user provides a fully‑formed
+    multi‑side debate prompt in the web input box. For simple topics,
+    it still adds a concise header so the debate remains contextual.
+    """
+    if "SIDE A" in topic or "SIDE B" in topic:
+        return topic  # user supplied full debate prompt – don't wrap further
+
+    base = f"Round {round_num} | SIDE {side} ({stance})\n\n{topic}"
+    return base
+
